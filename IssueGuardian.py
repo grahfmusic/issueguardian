@@ -16,15 +16,14 @@ import os
 class ApplicationInfo:
     @staticmethod
     def display_app_info():
-        header_line = "\u2550" * 60
-        print(f"\n{header_line}")
+        print("\n" + "\u2550" * 60)
         print("IssueGuardian :: Version 1.0.0")
         print("Monitor and Safeguard Against Untracked or Unassigned Issues")
         print("Developed by Dean Thomson")
         print("\nFOR INTERNAL USE ONLY")
         print("Copyright 2024 © CCA Software Pty Ltd. All Rights Reserved")
-        print(f"\header_line}\n")
-        
+        print("\u2550" * 60 + "\n")
+
 class ConfigValidator:
     @staticmethod
     def validate(config):
@@ -52,21 +51,22 @@ class JiraApi:
 
     def fetch_unassigned_issues(self):
         logger = logging.getLogger('UnassignedJiraReportLogger')
-        jql_query = 'assignee = EMPTY AND status != "Closed" AND status != "Resolved" AND status != "Done" ORDER BY created DESC'
+        logger.info("JIRA API Unassigned Ticket Request")
         api_url = f"{self.config['jira']['server']}/rest/api/2/search"
-
+        # Include 'customfield_10002' in the fields parameter
+        jql_query = 'assignee = EMPTY AND status != "Closed" AND status != "Resolved" AND status != "Done" ORDER BY created DESC'
         try:
             response = requests.get(api_url, auth=HTTPBasicAuth(self.config['jira']['username'], self.config['jira']['password']),
-                                    params={'jql': jql_query, 'fields': 'key,summary,assignee,reporter,created,updated,priority,description,status'})
+                                    params={'jql': jql_query, 'fields': 'key,summary,assignee,reporter,created,updated,priority,customfield_10002,description,status'})
             response.raise_for_status()
             issues = response.json()['issues']
-            if not issues:
-                logger.info("No unassigned issues found. No report will be generated.")
-                return None
-            logger.info(f"Fetched {len(issues)} unassigned issues.")
+            logger.info(f"Fetched {len(issues)} unassigned issues")
             return issues
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching unassigned issues: {e}")
+        except requests.exceptions.HTTPError as http_err:
+            logger.error(f"HTTP error occurred: {http_err}")
+            raise
+        except Exception as err:
+            logger.error(f"An error occurred: {err}")
             raise
 
         
@@ -176,7 +176,7 @@ class EmailReport:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, filename='issueguardian.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, filename='unassigned-jira-report.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger('UnassignedJiraReportLogger')
 
     abs_script_path = os.path.abspath(__file__)
@@ -197,11 +197,11 @@ def main():
     jira_api = JiraApi(config)
     issues = jira_api.fetch_unassigned_issues()
 
-    if issues:
-        email_report = EmailReport(config, args.recipient, args.cc.split(',') if args.cc else [])
-        email_report.send(issues)
-    else:
-        logger.info("No email was sent due to no unassigned issues.")
-        
+    # Fetch the recipient from the configuration
+    recipient_email = config['email']['recipient']
+    cc_emails = args.cc.split(',') if args.cc else []
+    email_report = EmailReport(config, recipient_email, cc_emails)
+    email_report.send(issues)
+
 if __name__ == "__main__":
     main()
