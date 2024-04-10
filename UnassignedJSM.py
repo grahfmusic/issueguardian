@@ -17,7 +17,7 @@ class ApplicationInfo:
     def display_app_info():
         print("\n" + "\u2550" * 51)
         print("AUJA (Automatic Unassigned Jira Announcer)")
-        print("Version 1.1.0")
+        print("Version 1.0.0")
         print("Developed by Dean Thomson")
         print("FOR INTERNAL USE ONLY")
         print("Copyright 2024 © CCA Software Pty Ltd. All Rights Reserved")
@@ -52,10 +52,11 @@ class JiraApi:
         logger = logging.getLogger('UnassignedJiraReportLogger')
         logger.info("JIRA API Unassigned Ticket Request")
         api_url = f"{self.config['jira']['server']}/rest/api/2/search"
+        # Include 'customfield_10002' in the fields parameter
         jql_query = 'assignee = EMPTY AND status != "Closed" AND status != "Resolved" AND status != "Done" ORDER BY created DESC'
         try:
             response = requests.get(api_url, auth=HTTPBasicAuth(self.config['jira']['username'], self.config['jira']['password']),
-                                    params={'jql': jql_query, 'fields': 'key,summary,assignee,reporter,created,updated,priority,status'})
+                                    params={'jql': jql_query, 'fields': 'key,summary,assignee,reporter,created,updated,priority,customfield_10002,description,status'})
             response.raise_for_status()
             issues = response.json()['issues']
             logger.info(f"Fetched {len(issues)} unassigned issues")
@@ -67,6 +68,7 @@ class JiraApi:
             logger.error(f"An error occurred: {err}")
             raise
 
+        
 class EmailReport:
     def __init__(self, config, recipient_email, cc_emails=[]):
         self.config = config
@@ -75,17 +77,86 @@ class EmailReport:
         self.current_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
     def generate_email_body(self, issues):
-        html_body = "<html><head></head><body>"
-        html_body += "<h1>Unassigned JIRA Issues Report</h1>"
-        if issues:
-            html_body += "<ul>"
-            for issue in issues:
-                html_body += f"<li><b>{issue['key']}</b>: {issue['fields']['summary']}</li>"
-            html_body += "</ul>"
-        else:
-            html_body += "<p>No unassigned issues found.</p>"
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Consolas, 'Ubuntu', Geneva, Verdana, sans-serif; }}
+                .hrdotted {{ border-top: 2px dotted darkblue; margin-left: auto; margin-right: auto; margin-top: 20px; margin-bottom: 20px; }}
+                .hrdotted2 {{ border-top: 4px dashed blue; margin-left: auto; margin-right: auto; margin-top: 20px; margin-bottom: 20px; }}
+                .hrdotted3 {{ border-top: 2px dotted #1e3f5a; margin-left: auto; margin-right: auto; margin-top: 20px; margin-bottom: 20px; width: 40%; }}
+                .hrdotteds {{ border-top: 2px dotted darkblue; margin-left: auto; margin-right: auto; margin-bottom: 20px; }}
+                .hrdottede {{ border-top: 2px dotted darkblue; margin-left: auto; margin-right: auto; margin-top: 20px; }}
+                .issue {{ margin-bottom: 30px; padding: 15px; border-left: 5px solid #007BFF; background-color: #f9f9f9; }}
+                .issue-header {{ font-weight: bold; color: #1e3f5a;font-size: 20px; margin-bottom: 10px; }}
+                .issue-header a {{ color: #007BFF; text-decoration: none; font-weight: bold; }}
+                .issue-detail, .description {{ margin-left: 20px; }}
+                .priority {{ padding: 3px; border-radius: 4px; color: #fff; font-weight: normal; }}
+                .High, .Highest {{ background-color: #DC3545; }}
+                .Medium {{ background-color: #FFC107; }}
+                .Low, .Lowest {{ background-color: #28A745; }}
+                .description-text {{ margin-top: 10px; padding-left: 20px; color: #1e3f5a; /* Additional indentation for the description content */ }}
+                .label {{ font-weight: bold; padding-right: 30px }}
+                .header-logo {{ text-align: center; margin-bottom: 20px; }}
+                .header-text {{ text-align: center; font-size: 16px; margin-top: 0px; color: #001F3F; font-weight: bold; text-transform: uppercase; }}
+            </style>
+        </head>
+        <body>
+            <div class="header-logo">
+                <img src="https://www.ccasoftware.com/wp-content/uploads/CCA-software-logo.svg" alt="CCA Software Logo" style="max-width: 90px;">
+                <div class="header-text">Software</div>
+            </div>
+            <div class="hrdotted3"></div>
+            <h2 style align="center">Unassigned JIRA Issues Report - {self.current_date}</h2>
+            <div class="hrdotted3"></div>
+            <br><br><br>
+        """
+
+        for issue in issues:
+            issue_url = f"{self.config['jira']['jira_ticket_base_url']}/{issue['key']}"
+            priority_class = issue['fields']['priority']['name'].capitalize()
+            
+            organization_field = issue['fields'].get('customfield_10002', 'N/A')
+            organization_names = ', '.join(org.get('name', 'Unknown') for org in organization_field) if isinstance(organization_field, list) else organization_field
+
+            description = issue['fields'].get('description', 'No description provided').replace('\n', '<br>')
+
+            html_body += f"""
+                <div class="issue">
+                    <div class="hrdotteds"></div>
+                    <div class="issue-header">
+                        <a href="{issue_url}" target="_blank">{issue['key']}</a> - {issue['fields']['summary']}
+                    </div><div class="hrdotted"></div>
+                    <br>
+                    <table class="issue-detail">
+                        <tr>
+                            <td class="label">Organization(s):</td>
+                            <td style="padding-right: 10px;">{organization_names}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Priority:</td>
+                            <td style="padding-right: 10px;"><span class="priority {priority_class}">{issue['fields']['priority']['name']}</span></td>
+                        </tr>
+                        <tr>
+                            <td class="label">Reporter:</td>
+                            <td style="padding-right: 10px;">{issue['fields']['reporter']['displayName']}</td>
+                        </tr>
+                    </table><br>
+                    <div class="hrdotted"></div>
+                    <div class="description">
+
+                        <span class="label">Description:</span>
+                        <div class="description-text">{description}</div>
+                    </div>
+                    <div class="hrdottede"></div>
+                </div>
+            """
+                
+            
         html_body += "</body></html>"
         return html_body
+
+
 
     def send(self, issues):
         html_body = self.generate_email_body(issues)
@@ -96,9 +167,12 @@ class EmailReport:
         if self.cc_emails:
             msg['Cc'] = ', '.join(self.cc_emails)
         msg.attach(MIMEText(html_body, 'html'))
+        
         with smtplib.SMTP_SSL(self.config['email']['smtp_server'], int(self.config['email']['smtp_port'])) as server:
             server.login(self.config['email']['smtp_username'], self.config['email']['smtp_password'])
             server.send_message(msg)
+
+
 
 def main():
     logging.basicConfig(level=logging.INFO, filename='unassigned-jira-report.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
