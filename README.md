@@ -1,6 +1,8 @@
 # IssueGuardian
-<img style="display: block; margin-left: auto; margin-right: auto;" src="https://github.com/grahfmusic/issueguardian/blob/master/imgs/readme_header.png?raw=true" alt="readme header"></img>
+
 **IssueGuardian** is a Python-based tool designed to monitor, identify, and alert on unassigned JIRA issues. It aims to ensure that all issues in a JIRA project receive prompt attention and are assigned appropriately, aiding teams in maintaining efficient workflows and project management practices.
+
+<img style="display: block; margin-left: auto; margin-right: auto;" src="https://github.com/grahfmusic/issueguardian/blob/master/imgs/readme_header.png?raw=true" alt="readme header"></img>
 
 ## Features
 
