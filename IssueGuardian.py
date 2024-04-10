@@ -359,7 +359,7 @@ def main():
     """
 
     # Configure logging
-    logging.basicConfig(level=logging.INFO, filename='unassigned-jira-report.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, filename='issueguardian.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger('UnassignedJiraReportLogger')
 
     # Change to the directory where the script is located
